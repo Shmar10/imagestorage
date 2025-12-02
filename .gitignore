@@ -1,0 +1,22 @@
+# Uploaded images
+uploads/
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+
+# Temporary files
+*.tmp
+*.log
+
+# Test files (remove these if you want to commit them)
+test.php
+simple.php
+info.php
+error_test.php
+test.html
+
+# OS files
+.DS_Store
+Thumbs.db
