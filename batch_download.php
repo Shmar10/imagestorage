@@ -4,6 +4,27 @@
  */
 
 require_once 'config.php';
+require_once 'galleries.php';
+
+// Check gallery authentication
+session_name(GALLERY_SESSION_NAME);
+session_start();
+
+if (!isset($_SESSION['gallery_authenticated']) || $_SESSION['gallery_authenticated'] !== true) {
+    http_response_code(401);
+    die('Unauthorized');
+}
+
+// Get gallery information
+$galleryId = $_SESSION['gallery_id'];
+$gallery = getGallery($galleryId);
+
+if (!$gallery) {
+    http_response_code(404);
+    die('Gallery not found');
+}
+
+$galleryUploadDir = __DIR__ . '/' . $gallery['upload_dir'];
 
 // Get requested files
 $files = isset($_GET['files']) ? $_GET['files'] : [];
@@ -35,13 +56,13 @@ if ($zip->open($zipFilePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== TRU
     die('Cannot create ZIP file');
 }
 
-$realUploadDir = realpath(UPLOAD_DIR);
+$realUploadDir = realpath($galleryUploadDir);
 $addedCount = 0;
 
 // Add files to ZIP
 foreach ($files as $file) {
     $fileName = basename($file);
-    $filePath = UPLOAD_DIR . $fileName;
+    $filePath = $galleryUploadDir . $fileName;
 
     // Security check
     if (!file_exists($filePath) || !is_file($filePath)) {
@@ -49,8 +70,8 @@ foreach ($files as $file) {
     }
 
     $realPath = realpath($filePath);
-    if (strpos($realPath, $realUploadDir) !== 0) {
-        continue; // Skip files outside upload directory
+    if (!$realPath || !$realUploadDir || strpos($realPath, $realUploadDir) !== 0) {
+        continue; // Skip files outside gallery upload directory
     }
 
     // Add file to ZIP

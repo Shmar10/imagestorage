@@ -1,31 +1,41 @@
 <?php
 /**
- * Handles file uploads (single and batch)
+ * Admin upload handler - allows admin to upload images to any gallery
  */
-
-// Suppress any output that might interfere with JSON response
-ob_start();
-error_reporting(0); // Suppress warnings during upload
 
 require_once 'config.php';
 require_once 'galleries.php';
 
-// Check gallery authentication
-session_name(GALLERY_SESSION_NAME);
+session_name(ADMIN_SESSION_NAME);
 session_start();
 
-if (!isset($_SESSION['gallery_authenticated']) || $_SESSION['gallery_authenticated'] !== true) {
+// Check admin authentication
+if (!isset($_SESSION['admin_authenticated']) || $_SESSION['admin_authenticated'] !== true) {
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'Unauthorized']);
     exit;
 }
 
-// Get gallery information
-$galleryId = $_SESSION['gallery_id'];
-$gallery = getGallery($galleryId);
+// Suppress any output that might interfere with JSON response
+ob_start();
+// Keep error reporting for debugging - we'll catch errors
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
 
+// Get gallery ID from POST
+$galleryId = $_POST['gallery_id'] ?? '';
+if (empty($galleryId)) {
+    ob_clean();
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'error' => 'Gallery ID required']);
+    exit;
+}
+
+// Get gallery
+$gallery = getGallery($galleryId);
 if (!$gallery) {
-    http_response_code(401);
+    ob_clean();
+    header('Content-Type: application/json');
     echo json_encode(['success' => false, 'error' => 'Gallery not found']);
     exit;
 }
@@ -33,25 +43,25 @@ if (!$gallery) {
 // Set upload directory for this gallery
 $galleryUploadDir = __DIR__ . '/' . $gallery['upload_dir'];
 if (!file_exists($galleryUploadDir)) {
-    mkdir($galleryUploadDir, 0755, true);
+    if (!mkdir($galleryUploadDir, 0755, true)) {
+        ob_clean();
+        header('Content-Type: application/json');
+        echo json_encode(['success' => false, 'error' => 'Failed to create upload directory: ' . $galleryUploadDir]);
+        exit;
+    }
+}
+
+// Verify directory is writable
+if (!is_writable($galleryUploadDir)) {
+    ob_clean();
+    header('Content-Type: application/json');
+    echo json_encode(['success' => false, 'error' => 'Upload directory is not writable: ' . $galleryUploadDir]);
+    exit;
 }
 
 // Clear any output before sending JSON
 ob_clean();
 header('Content-Type: application/json');
-
-// Helper function to convert PHP ini size strings to bytes
-function return_bytes($val) {
-    $val = trim($val);
-    $last = strtolower($val[strlen($val)-1]);
-    $val = (int)$val;
-    switch($last) {
-        case 'g': $val *= 1024;
-        case 'm': $val *= 1024;
-        case 'k': $val *= 1024;
-    }
-    return $val;
-}
 
 // Check if POST data was too large (PHP rejects it before we can process it)
 if (empty($_POST) && empty($_FILES) && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
@@ -203,4 +213,4 @@ if (empty($uploadedFiles) && !empty($errors)) {
 // End output buffering
 ob_end_flush();
 exit;
-?>
+

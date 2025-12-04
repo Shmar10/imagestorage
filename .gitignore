@@ -6,6 +6,9 @@ uploads/
 *.gif
 *.webp
 
+# Gallery data (contains password hashes)
+data/
+
 # Temporary files
 *.tmp
 *.log

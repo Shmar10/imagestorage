@@ -4,69 +4,49 @@
  */
 
 require_once 'config.php';
+require_once 'galleries.php';
 
-// Handle authentication if password is required
-if (REQUIRE_PASSWORD) {
-    session_name(SESSION_NAME);
-    session_start();
-    
-    // Handle login
-    if (isset($_POST['password'])) {
-        if ($_POST['password'] === UPLOAD_PASSWORD) {
-            $_SESSION['authenticated'] = true;
-            header('Location: ' . $_SERVER['PHP_SELF']);
-            exit;
-        } else {
-            $loginError = 'Incorrect password';
-        }
-    }
-    
-    // Check if authenticated
-    if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true) {
-        // Show login form
-        ?>
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Image Storage - Login</title>
-            <link rel="stylesheet" href="style.css">
-        </head>
-        <body>
-            <div class="container">
-                <div class="login-box">
-                    <h1>Image Storage</h1>
-                    <p>Please enter the password to access:</p>
-                    <?php if (isset($loginError)): ?>
-                        <div class="error"><?php echo htmlspecialchars($loginError); ?></div>
-                    <?php endif; ?>
-                    <form method="POST">
-                        <input type="password" name="password" placeholder="Password" required autofocus>
-                        <button type="submit">Login</button>
-                    </form>
-                </div>
-            </div>
-        </body>
-        </html>
-        <?php
-        exit;
-    }
+// Check gallery authentication
+session_name(GALLERY_SESSION_NAME);
+session_start();
+
+// If not authenticated, redirect to user login
+if (!isset($_SESSION['gallery_authenticated']) || $_SESSION['gallery_authenticated'] !== true) {
+    header('Location: user_login.php');
+    exit;
 }
 
-// Get list of uploaded images
+// Get gallery information
+$galleryId = $_SESSION['gallery_id'];
+$galleryName = $_SESSION['gallery_name'] ?? 'My Gallery';
+$gallery = getGallery($galleryId);
+
+// If gallery not found, clear session and redirect
+if (!$gallery) {
+    session_destroy();
+    header('Location: user_login.php');
+    exit;
+}
+
+// Set upload directory for this gallery
+$galleryUploadDir = __DIR__ . '/' . $gallery['upload_dir'];
+if (!file_exists($galleryUploadDir)) {
+    mkdir($galleryUploadDir, 0755, true);
+}
+
+// Get list of uploaded images for this gallery
 $images = [];
-if (file_exists(UPLOAD_DIR)) {
-    $files = scandir(UPLOAD_DIR);
+if (file_exists($galleryUploadDir)) {
+    $files = scandir($galleryUploadDir);
     foreach ($files as $file) {
         if ($file === '.' || $file === '..') continue;
-        $filePath = UPLOAD_DIR . $file;
-        if (is_file($filePath) && in_array(mime_content_type($filePath), ALLOWED_TYPES)) {
+        $filePath = $galleryUploadDir . $file;
+        if (is_file($filePath) && in_array(getMimeType($filePath), ALLOWED_TYPES)) {
             $images[] = [
                 'name' => $file,
                 'size' => filesize($filePath),
                 'modified' => filemtime($filePath),
-                'url' => 'download.php?file=' . urlencode($file)
+                'url' => 'download.php?file=' . urlencode($file) . '&gallery=' . urlencode($galleryId)
             ];
         }
     }
@@ -91,10 +71,8 @@ if (file_exists(UPLOAD_DIR)) {
 <body>
     <div class="container">
         <header>
-            <h1>Image Storage</h1>
-            <?php if (REQUIRE_PASSWORD): ?>
-                <a href="logout.php" class="logout-btn">Logout</a>
-            <?php endif; ?>
+            <h1><?php echo htmlspecialchars($galleryName); ?></h1>
+            <a href="logout.php" class="logout-btn">Logout</a>
         </header>
 
         <!-- Upload Section -->
