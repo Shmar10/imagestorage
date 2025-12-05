@@ -66,11 +66,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     if (empty($username) || empty($password)) {
         $createError = 'Username and password are required';
     } else {
-        $result = createGallery($username, $password, $name);
-        if ($result) {
-            $createSuccess = 'Gallery created successfully!';
+        // Validate username format
+        if (!preg_match('/^[a-zA-Z0-9_-]+$/', $username)) {
+            $createError = 'Username can only contain letters, numbers, underscores, and hyphens.';
         } else {
-            $createError = 'Failed to create gallery. Username may already exist.';
+            // Check if username exists
+            $existing = getGalleryByUsername($username);
+            if ($existing !== null) {
+                $createError = 'Username "' . htmlspecialchars($username) . '" is already in use.';
+            } else {
+                $result = createGallery($username, $password, $name);
+                if ($result) {
+                    $createSuccess = 'Gallery created successfully!';
+                } else {
+                    $createError = 'Failed to create gallery. Please try again.';
+                }
+            }
         }
     }
 }
@@ -255,7 +266,10 @@ $galleries = getGalleries();
     <div class="container">
         <header>
             <h1>Image Storage - Admin Panel</h1>
-            <a href="logout.php?admin=1" class="logout-btn">Logout</a>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <a href="cleanup_orphaned.php" style="color: #dc3545; text-decoration: none; font-size: 14px;">Cleanup Orphaned Folders</a>
+                <a href="logout.php?admin=1" class="logout-btn">Logout</a>
+            </div>
         </header>
 
         <?php if ($createSuccess): ?>

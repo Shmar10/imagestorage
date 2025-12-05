@@ -13,8 +13,7 @@
     const selectAllBtn = document.getElementById('selectAllBtn');
     const deselectAllBtn = document.getElementById('deselectAllBtn');
     const downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
-    const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
-    const deleteAllBtn = document.getElementById('deleteAllBtn');
+    const rejectSelectedBtn = document.getElementById('rejectSelectedBtn');
 
     // Upload area click handler
     uploadArea.addEventListener('click', () => {
@@ -163,14 +162,18 @@
         if (count > 0) {
             downloadSelectedBtn.style.display = 'inline-block';
             downloadSelectedBtn.disabled = false;
-            deleteSelectedBtn.style.display = 'inline-block';
-            deleteSelectedBtn.disabled = false;
+            if (rejectSelectedBtn) {
+                rejectSelectedBtn.style.display = 'inline-block';
+                rejectSelectedBtn.disabled = false;
+            }
             deselectAllBtn.style.display = 'inline-block';
             selectAllBtn.style.display = 'none';
         } else {
             downloadSelectedBtn.style.display = 'none';
-            deleteSelectedBtn.style.display = 'inline-block';
-            deleteSelectedBtn.disabled = true;
+            if (rejectSelectedBtn) {
+                rejectSelectedBtn.style.display = 'inline-block';
+                rejectSelectedBtn.disabled = true;
+            }
             deselectAllBtn.style.display = 'none';
             selectAllBtn.style.display = 'inline-block';
         }
@@ -256,19 +259,16 @@
         }
     });
 
-    // Delete selected button
-    deleteSelectedBtn.addEventListener('click', () => {
-        const checked = document.querySelectorAll('.image-checkbox:checked');
-        if (checked.length === 0) return;
+    // Reject selected button
+    if (rejectSelectedBtn) {
+        rejectSelectedBtn.addEventListener('click', () => {
+            const checked = document.querySelectorAll('.image-checkbox:checked');
+            if (checked.length === 0) return;
 
-        const count = checked.length;
-        if (!confirm(`Are you sure you want to delete ${count} image(s)? This action cannot be undone.`)) {
-            return;
-        }
-
-        const files = Array.from(checked).map(cb => cb.value);
-        deleteFiles(files);
-    });
+            const files = Array.from(checked).map(cb => cb.value);
+            rejectFiles(files);
+        });
+    }
 
     // Individual download button handlers
     document.addEventListener('click', async (e) => {
@@ -313,18 +313,26 @@
         }
     });
 
-    // Individual delete button handlers
+    // Individual reject button handlers
     document.addEventListener('click', (e) => {
-        if (e.target.classList.contains('btn-delete')) {
-            const fileName = e.target.getAttribute('data-file');
-            if (confirm(`Are you sure you want to delete "${fileName}"? This action cannot be undone.`)) {
-                deleteFiles([fileName]);
+        if (e.target.classList.contains('btn-reject')) {
+            // Check if multiple images are selected
+            const checked = document.querySelectorAll('.image-checkbox:checked');
+            
+            if (checked.length > 1) {
+                // If multiple images are selected, reject all selected images
+                const files = Array.from(checked).map(cb => cb.value);
+                rejectFiles(files);
+            } else {
+                // If no or only one image selected, reject just this one
+                const fileName = e.target.getAttribute('data-file');
+                rejectFiles([fileName]);
             }
         }
     });
 
-    // Delete files function
-    function deleteFiles(files) {
+    // Reject files function
+    function rejectFiles(files) {
         // Show loading state
         files.forEach(fileName => {
             const checkbox = document.querySelector(`.image-checkbox[value="${fileName}"]`);
@@ -337,7 +345,7 @@
             }
         });
 
-        // Delete files one by one
+        // Reject files one by one
         let completed = 0;
         let failed = 0;
 
@@ -346,7 +354,7 @@
             formData.append('file', fileName);
 
             const xhr = new XMLHttpRequest();
-            xhr.open('POST', 'delete.php');
+            xhr.open('POST', 'reject.php');
             
             xhr.addEventListener('load', () => {
                 completed++;
@@ -355,7 +363,7 @@
                         const response = JSON.parse(xhr.responseText);
                         if (!response.success) {
                             failed++;
-                            console.error('Delete failed:', response.error);
+                            console.error('Reject failed:', response.error);
                         }
                     } catch (e) {
                         failed++;
@@ -365,17 +373,18 @@
                     failed++;
                 }
 
-                // If all requests completed, reload page
+                // If all requests completed, reload page to show correct filenames
                 if (completed === files.length) {
                     if (failed === 0) {
-                        showSuccess(`Successfully deleted ${files.length} file(s)`);
+                        showSuccess(`Successfully rejected ${files.length} file(s)`);
+                        // Force reload to show actual filenames (in case they were renamed)
                         setTimeout(() => {
-                            window.location.reload();
-                        }, 1000);
+                            window.location.reload(true);
+                        }, 500);
                     } else {
-                        showError(`Deleted ${files.length - failed} file(s), ${failed} failed`);
+                        showError(`Rejected ${files.length - failed} file(s), ${failed} failed`);
                         setTimeout(() => {
-                            window.location.reload();
+                            window.location.reload(true);
                         }, 2000);
                     }
                 }
@@ -385,7 +394,7 @@
                 completed++;
                 failed++;
                 if (completed === files.length) {
-                    showError(`Error deleting files. ${failed} failed.`);
+                    showError(`Error rejecting files. ${failed} failed.`);
                     setTimeout(() => {
                         window.location.reload();
                     }, 2000);
@@ -396,25 +405,181 @@
         });
     }
 
-    // Delete all button
-    if (deleteAllBtn) {
-        deleteAllBtn.addEventListener('click', () => {
-            const allCheckboxes = document.querySelectorAll('.image-checkbox');
-            const totalCount = allCheckboxes.length;
+    // Helper function to escape CSS selector special characters
+    function escapeSelector(str) {
+        return str.replace(/[!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~]/g, '\\$&');
+    }
+
+    // Restore files function
+    function restoreFiles(files) {
+        // Show loading state
+        const itemsToRemove = [];
+        files.forEach(fileName => {
+            const escapedFileName = escapeSelector(fileName);
+            const item = document.querySelector(`.rejected-item[data-file="${escapedFileName}"]`);
+            if (item) {
+                item.style.opacity = '0.5';
+                item.style.pointerEvents = 'none';
+                itemsToRemove.push(item);
+            }
+        });
+
+        // Restore files one by one
+        let completed = 0;
+        let failed = 0;
+
+        files.forEach(fileName => {
+            console.log('Attempting to restore file:', fileName);
+            const formData = new FormData();
+            formData.append('file', fileName);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'restore.php');
             
-            if (totalCount === 0) {
-                return;
-            }
+            xhr.addEventListener('load', () => {
+                completed++;
+                if (xhr.status === 200) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.success) {
+                            // Remove the item from the DOM using the original filename
+                            // The server may have found a file with a different name, but we remove by the original
+                            const escapedFileName = escapeSelector(fileName);
+                            let item = document.querySelector(`.rejected-item[data-file="${escapedFileName}"]`);
+                            
+                            // If not found with original name, try the restored filename if provided
+                            if (!item && response.restored_file) {
+                                const escapedRestoredName = escapeSelector(response.restored_file);
+                                item = document.querySelector(`.rejected-item[data-file="${escapedRestoredName}"]`);
+                            }
+                            
+                            // If still not found, try to find any rejected item (fallback)
+                            if (!item) {
+                                const rejectedGallery = document.getElementById('rejectedGallery');
+                                if (rejectedGallery) {
+                                    const allItems = rejectedGallery.querySelectorAll('.rejected-item');
+                                    if (allItems.length === 1) {
+                                        item = allItems[0];
+                                    }
+                                }
+                            }
+                            
+                            if (item) {
+                                item.remove();
+                            }
+                            
+                            // If no more rejected items, hide the rejected section
+                            const rejectedGallery = document.getElementById('rejectedGallery');
+                            if (rejectedGallery && rejectedGallery.querySelectorAll('.rejected-item').length === 0) {
+                                const rejectedSection = rejectedGallery.closest('.rejects-section');
+                                if (rejectedSection) {
+                                    rejectedSection.remove();
+                                }
+                            }
+                        } else {
+                            failed++;
+                            console.error('Restore failed:', response.error);
+                            // Show error message
+                            if (response.error) {
+                                showError('Restore failed: ' + response.error);
+                            }
+                            // Restore visibility for failed items
+                            const escapedFileName = escapeSelector(fileName);
+                            const item = document.querySelector(`.rejected-item[data-file="${escapedFileName}"]`);
+                            if (item) {
+                                item.style.opacity = '1';
+                                item.style.pointerEvents = 'auto';
+                            }
+                        }
+                    } catch (e) {
+                        failed++;
+                        console.error('Failed to parse response:', e, xhr.responseText);
+                        showError('Failed to parse server response');
+                        // Restore visibility for failed items
+                        const escapedFileName = escapeSelector(fileName);
+                        const item = document.querySelector(`.rejected-item[data-file="${escapedFileName}"]`);
+                        if (item) {
+                            item.style.opacity = '1';
+                            item.style.pointerEvents = 'auto';
+                        }
+                    }
+                } else {
+                    failed++;
+                    showError('Restore failed with HTTP status: ' + xhr.status);
+                    // Restore visibility for failed items
+                    const escapedFileName = escapeSelector(fileName);
+                    const item = document.querySelector(`.rejected-item[data-file="${escapedFileName}"]`);
+                    if (item) {
+                        item.style.opacity = '1';
+                        item.style.pointerEvents = 'auto';
+                    }
+                }
 
-            if (!confirm(`Are you sure you want to delete ALL ${totalCount} image(s)? This action cannot be undone.`)) {
-                return;
-            }
+                // If all requests completed, reload page to refresh the main gallery
+                if (completed === files.length) {
+                    if (failed === 0) {
+                        showSuccess(`Successfully restored ${files.length} file(s)`);
+                        setTimeout(() => {
+                            window.location.reload(true);
+                        }, 500);
+                    } else {
+                        showError(`Restored ${files.length - failed} file(s), ${failed} failed`);
+                        setTimeout(() => {
+                            window.location.reload(true);
+                        }, 2000);
+                    }
+                }
+            });
 
-            // Get all file names
-            const allFiles = Array.from(allCheckboxes).map(cb => cb.value);
-            deleteFiles(allFiles);
+            xhr.addEventListener('error', () => {
+                completed++;
+                failed++;
+                showError('Network error while restoring file');
+                // Restore visibility for failed items
+                const escapedFileName = escapeSelector(fileName);
+                const item = document.querySelector(`.rejected-item[data-file="${escapedFileName}"]`);
+                if (item) {
+                    item.style.opacity = '1';
+                    item.style.pointerEvents = 'auto';
+                }
+                if (completed === files.length) {
+                    showError(`Error restoring files. ${failed} failed.`);
+                    setTimeout(() => {
+                        window.location.reload(true);
+                    }, 2000);
+                }
+            });
+
+            xhr.send(formData);
         });
     }
+
+    // Individual restore button handlers
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('btn-restore')) {
+            e.preventDefault();
+            e.stopPropagation();
+            const button = e.target;
+            const item = button.closest('.rejected-item');
+            
+            // Try to get the actual filename from the item's data attribute
+            let fileName = item ? item.getAttribute('data-actual-file') : null;
+            if (!fileName) {
+                fileName = button.getAttribute('data-file');
+            }
+            
+            console.log('Restore button clicked for file:', fileName);
+            console.log('Item data-file:', item ? item.getAttribute('data-file') : 'N/A');
+            console.log('Item data-actual-file:', item ? item.getAttribute('data-actual-file') : 'N/A');
+            
+            if (!fileName) {
+                console.error('No filename found in restore button');
+                showError('Error: No filename specified');
+                return;
+            }
+            restoreFiles([fileName]);
+        }
+    });
 
     // Lightbox functionality
     const lightbox = document.getElementById('lightbox');

@@ -84,8 +84,9 @@ function createGallery($username, $password, $name = null) {
         return false;
     }
     
-    // Check if username already exists
-    if (getGalleryByUsername($username) !== null) {
+    // Check if username already exists - reload galleries to ensure we have latest data
+    $existingGallery = getGalleryByUsername($username);
+    if ($existingGallery !== null) {
         return false;
     }
     
@@ -102,8 +103,15 @@ function createGallery($username, $password, $name = null) {
         'upload_dir' => 'uploads/' . $galleryId . '/'
     ];
     
-    // Get existing galleries
+    // Get existing galleries (fresh read)
     $galleries = getGalleries();
+    
+    // Double-check username doesn't exist (race condition protection)
+    foreach ($galleries as $existing) {
+        if ($existing['username'] === $username) {
+            return false;
+        }
+    }
     
     // Add new gallery
     $galleries[] = $gallery;
@@ -113,13 +121,52 @@ function createGallery($username, $password, $name = null) {
         // Create upload directory
         $uploadDir = __DIR__ . '/' . $gallery['upload_dir'];
         if (!file_exists($uploadDir)) {
-            mkdir($uploadDir, 0755, true);
+            if (!mkdir($uploadDir, 0755, true)) {
+                // If directory creation fails, remove gallery from array
+                array_pop($galleries);
+                saveGalleries($galleries);
+                return false;
+            }
         }
         
         return $gallery;
     }
     
     return false;
+}
+
+/**
+ * Recursively delete a directory and all its contents
+ * @param string $dir Directory path
+ * @return bool Success status
+ */
+function deleteDirectory($dir) {
+    if (!file_exists($dir)) {
+        return true;
+    }
+    
+    if (!is_dir($dir)) {
+        return unlink($dir);
+    }
+    
+    $files = array_diff(scandir($dir), ['.', '..']);
+    foreach ($files as $file) {
+        $filePath = $dir . DIRECTORY_SEPARATOR . $file;
+        if (is_dir($filePath)) {
+            // Recursively delete subdirectory - check return value
+            if (!deleteDirectory($filePath)) {
+                return false; // If subdirectory deletion failed, abort
+            }
+        } else {
+            // Delete file - check return value
+            if (!unlink($filePath)) {
+                return false; // If file deletion failed, abort
+            }
+        }
+    }
+    
+    // Remove the directory itself
+    return rmdir($dir);
 }
 
 /**
@@ -133,19 +180,18 @@ function deleteGallery($galleryId) {
     
     foreach ($galleries as $index => $gallery) {
         if ($gallery['id'] === $galleryId) {
-            // Delete upload directory
+            // Delete upload directory (including subdirectories like rejects/)
             $uploadDir = __DIR__ . '/' . $gallery['upload_dir'];
             if (file_exists($uploadDir)) {
-                // Delete all files in directory
-                $files = glob($uploadDir . '*');
-                foreach ($files as $file) {
-                    if (is_file($file)) {
-                        unlink($file);
-                    }
+                // Recursively delete the entire directory
+                if (!deleteDirectory($uploadDir)) {
+                    // If deletion failed, try again or log error
+                    // For now, we'll still remove from JSON but attempt deletion
+                    error_log("Warning: Failed to delete gallery directory: " . $uploadDir);
                 }
-                rmdir($uploadDir);
             }
             
+            // Remove gallery from array
             unset($galleries[$index]);
             $found = true;
             break;
@@ -154,6 +200,7 @@ function deleteGallery($galleryId) {
     
     if ($found) {
         $galleries = array_values($galleries); // Re-index array
+        // Save galleries to allow username reuse
         return saveGalleries($galleries);
     }
     

@@ -34,19 +34,20 @@ if (!file_exists($galleryUploadDir)) {
     mkdir($galleryUploadDir, 0755, true);
 }
 
-// Get list of uploaded images for this gallery
+// Get list of uploaded images for this gallery (excluding rejects)
 $images = [];
+$rejectedImages = [];
 if (file_exists($galleryUploadDir)) {
     $files = scandir($galleryUploadDir);
     foreach ($files as $file) {
-        if ($file === '.' || $file === '..') continue;
+        if ($file === '.' || $file === '..' || $file === 'rejects') continue;
         $filePath = $galleryUploadDir . $file;
         if (is_file($filePath) && in_array(getMimeType($filePath), ALLOWED_TYPES)) {
             $images[] = [
                 'name' => $file,
                 'size' => filesize($filePath),
                 'modified' => filemtime($filePath),
-                'url' => 'download.php?file=' . urlencode($file) . '&gallery=' . urlencode($galleryId)
+                'url' => 'download.php?file=' . urlencode($file) . '&gallery=' . urlencode($galleryId) . '&t=' . filemtime($filePath)
             ];
         }
     }
@@ -57,6 +58,35 @@ if (file_exists($galleryUploadDir)) {
     // Add index after sorting
     foreach ($images as $index => &$image) {
         $image['index'] = $index;
+    }
+}
+
+// Get list of rejected images
+$rejectsDir = $galleryUploadDir . 'rejects/';
+if (file_exists($rejectsDir)) {
+    $rejectFiles = scandir($rejectsDir);
+    foreach ($rejectFiles as $file) {
+        if ($file === '.' || $file === '..') continue;
+        $filePath = $rejectsDir . $file;
+        if (is_file($filePath) && in_array(getMimeType($filePath), ALLOWED_TYPES)) {
+            // Use the actual filename from the filesystem
+            $actualFileName = basename($filePath);
+            $rejectedImages[] = [
+                'name' => $actualFileName,
+                'size' => filesize($filePath),
+                'modified' => filemtime($filePath),
+                'url' => 'download.php?file=' . urlencode('rejects/' . $actualFileName) . '&gallery=' . urlencode($galleryId) . '&t=' . filemtime($filePath)
+            ];
+        }
+    }
+    // Sort by modification time (newest first)
+    usort($rejectedImages, function($a, $b) {
+        return $b['modified'] - $a['modified'];
+    });
+    // Add index after sorting
+    $rejectedStartIndex = count($images);
+    foreach ($rejectedImages as $index => &$image) {
+        $image['index'] = $rejectedStartIndex + $index;
     }
 }
 ?>
@@ -122,12 +152,9 @@ if (file_exists($galleryUploadDir)) {
                     <button id="downloadSelectedBtn" class="btn-primary" style="display: none;">
                         Download Selected (<span class="selected-count">0</span> files)
                     </button>
-                    <button id="deleteSelectedBtn" class="btn-delete-batch" disabled>
-                        Delete Selected (<span class="selected-count">0</span>)
+                    <button id="rejectSelectedBtn" class="btn-reject-batch" disabled>
+                        Reject Selected (<span class="selected-count">0</span>)
                     </button>
-                    <?php if (count($images) > 0): ?>
-                        <button id="deleteAllBtn" class="btn-delete-batch">Delete All (<?php echo count($images); ?>)</button>
-                    <?php endif; ?>
                 </div>
             </div>
             <div class="gallery" id="gallery">
@@ -168,9 +195,9 @@ if (file_exists($galleryUploadDir)) {
                                     <button class="btn-download download-single" 
                                             data-file="<?php echo htmlspecialchars($image['name']); ?>"
                                             data-url="<?php echo htmlspecialchars($image['url']); ?>">Download</button>
-                                    <button class="btn-delete" 
+                                    <button class="btn-reject" 
                                             data-file="<?php echo htmlspecialchars($image['name']); ?>"
-                                            title="Delete image">Delete</button>
+                                            title="Reject image">Reject</button>
                                 </div>
                             </div>
                         </div>
@@ -178,6 +205,53 @@ if (file_exists($galleryUploadDir)) {
                 <?php endif; ?>
             </div>
         </section>
+
+        <!-- Rejected Images Section -->
+        <?php if (count($rejectedImages) > 0): ?>
+        <section class="gallery-section rejects-section">
+            <div class="gallery-header">
+                <div class="gallery-header-top">
+                    <h2>Rejected Images (<?php echo count($rejectedImages); ?>)</h2>
+                </div>
+            </div>
+            <div class="gallery" id="rejectedGallery">
+                <?php foreach ($rejectedImages as $image): ?>
+                    <!-- Debug: Actual filename from directory: <?php echo htmlspecialchars($image['name']); ?> -->
+                    <div class="gallery-item rejected-item" 
+                         data-file="<?php echo htmlspecialchars($image['name']); ?>"
+                         data-size="<?php echo $image['size']; ?>"
+                         data-modified="<?php echo $image['modified']; ?>"
+                         data-name="<?php echo htmlspecialchars(strtolower($image['name'])); ?>"
+                         data-actual-file="<?php echo htmlspecialchars($image['name']); ?>">
+                        <div class="gallery-item-image">
+                            <img src="<?php echo htmlspecialchars($image['url']); ?>" 
+                                 alt="<?php echo htmlspecialchars($image['name']); ?>"
+                                 loading="lazy"
+                                 class="gallery-image-clickable"
+                                 data-image-url="<?php echo htmlspecialchars($image['url']); ?>"
+                                 data-image-name="<?php echo htmlspecialchars($image['name']); ?>"
+                                 data-image-index="<?php echo $image['index']; ?>">
+                        </div>
+                        <div class="gallery-item-info">
+                            <div class="gallery-item-name" title="<?php echo htmlspecialchars($image['name']); ?>">
+                                <?php echo htmlspecialchars($image['name']); ?>
+                            </div>
+                            <div class="gallery-item-meta">
+                                <span><?php echo number_format($image['size'] / 1024, 1); ?> KB</span>
+                                <span>•</span>
+                                <span><?php echo date('Y-m-d H:i', $image['modified']); ?></span>
+                            </div>
+                            <div class="gallery-item-actions">
+                                <button class="btn-restore" 
+                                        data-file="<?php echo htmlspecialchars($image['name']); ?>"
+                                        title="Restore to Gallery">Restore to Gallery</button>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </section>
+        <?php endif; ?>
     </div>
 
     <!-- Lightbox Modal -->

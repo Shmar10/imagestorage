@@ -16,10 +16,10 @@ if (!isset($_SESSION['gallery_authenticated']) || $_SESSION['gallery_authenticat
 }
 
 // Get requested file and gallery
-$fileName = isset($_GET['file']) ? basename($_GET['file']) : null;
+$fileRequest = isset($_GET['file']) ? $_GET['file'] : null;
 $galleryId = isset($_GET['gallery']) ? $_GET['gallery'] : $_SESSION['gallery_id'];
 
-if (!$fileName) {
+if (!$fileRequest) {
     http_response_code(400);
     die('No file specified');
 }
@@ -37,7 +37,16 @@ if (!$gallery) {
 }
 
 $galleryUploadDir = __DIR__ . '/' . $gallery['upload_dir'];
-$filePath = $galleryUploadDir . $fileName;
+
+// Handle files in rejects subdirectory
+// Security: Only allow "rejects/" prefix, no other directory traversal
+if (strpos($fileRequest, 'rejects/') === 0) {
+    $fileName = basename(substr($fileRequest, 8)); // Remove "rejects/" prefix
+    $filePath = $galleryUploadDir . 'rejects/' . $fileName;
+} else {
+    $fileName = basename($fileRequest);
+    $filePath = $galleryUploadDir . $fileName;
+}
 
 // Check if file exists
 if (!file_exists($filePath) || !is_file($filePath)) {
@@ -62,9 +71,10 @@ $fileName = basename($filePath);
 // Use both filename and filename* for better browser compatibility
 header('Content-Type: ' . $mimeType);
 header('Content-Length: ' . $fileSize);
-header('Content-Disposition: attachment; filename="' . $fileName . '"; filename*=UTF-8\'\'' . rawurlencode($fileName));
-header('Cache-Control: no-cache, must-revalidate');
+header('Content-Disposition: inline; filename="' . $fileName . '"; filename*=UTF-8\'\'' . rawurlencode($fileName));
+header('Cache-Control: no-cache, no-store, must-revalidate, max-age=0');
 header('Pragma: no-cache');
+header('Expires: 0');
 
 // Output file
 readfile($filePath);
