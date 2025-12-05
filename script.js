@@ -15,39 +15,47 @@
     const downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
     const rejectSelectedBtn = document.getElementById('rejectSelectedBtn');
 
-    // Upload area click handler
-    uploadArea.addEventListener('click', () => {
-        fileInput.click();
-    });
+    // Upload functionality (only if upload section exists)
+    if (uploadArea && fileInput) {
+        // Upload area click handler
+        uploadArea.addEventListener('click', () => {
+            fileInput.click();
+        });
 
-    // Drag and drop handlers
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.classList.add('dragover');
-    });
+        // Drag and drop handlers
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
 
-    uploadArea.addEventListener('dragleave', () => {
-        uploadArea.classList.remove('dragover');
-    });
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
 
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('dragover');
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
-            handleFiles(files);
-        }
-    });
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFiles(files);
+            }
+        });
 
-    // File input change handler
-    fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            handleFiles(e.target.files);
-        }
-    });
+        // File input change handler
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFiles(e.target.files);
+            }
+        });
+    }
 
     // Handle file uploads
     function handleFiles(files) {
+        // Only proceed if upload elements exist
+        if (!uploadProgress || !progressFill || !progressText || !uploadResults) {
+            return;
+        }
+
         const formData = new FormData();
         
         // Add all files to FormData

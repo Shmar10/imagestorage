@@ -55,13 +55,23 @@ if (!isset($_SESSION['admin_authenticated']) || $_SESSION['admin_authenticated']
     exit;
 }
 
+// Handle success messages from redirect
+if (isset($_GET['success'])) {
+    if ($_GET['success'] === 'gallery_updated') {
+        $createSuccess = 'Gallery settings updated successfully!';
+    }
+}
+
 // Handle gallery creation
 $createError = '';
-$createSuccess = '';
+if (!isset($createSuccess)) {
+    $createSuccess = '';
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'create') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     $name = trim($_POST['name'] ?? '');
+    $allowUploads = isset($_POST['allow_uploads']) && $_POST['allow_uploads'] === '1';
     
     if (empty($username) || empty($password)) {
         $createError = 'Username and password are required';
@@ -75,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             if ($existing !== null) {
                 $createError = 'Username "' . htmlspecialchars($username) . '" is already in use.';
             } else {
-                $result = createGallery($username, $password, $name);
+                $result = createGallery($username, $password, $name, $allowUploads);
                 if ($result) {
                     $createSuccess = 'Gallery created successfully!';
                 } else {
@@ -95,6 +105,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         } else {
             $createError = 'Failed to delete gallery.';
         }
+    }
+}
+
+// Handle gallery edit
+$editGalleryId = null;
+$editGallery = null;
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'edit') {
+    $galleryId = $_POST['gallery_id'] ?? '';
+    $name = trim($_POST['name'] ?? '');
+    $allowUploads = isset($_POST['allow_uploads']) && $_POST['allow_uploads'] === '1';
+    
+    if (!empty($galleryId)) {
+        if (!empty($name)) {
+            $settings = [
+                'name' => $name,
+                'allow_uploads' => $allowUploads
+            ];
+            if (updateGallerySettings($galleryId, $settings)) {
+                // Redirect to main page with success message
+                header('Location: admin.php?success=gallery_updated');
+                exit;
+            } else {
+                $createError = 'Failed to update gallery settings.';
+            }
+        } else {
+            $createError = 'Display name is required.';
+        }
+    }
+}
+
+// Handle edit form display
+if (isset($_GET['edit']) && !empty($_GET['edit'])) {
+    $editGalleryId = $_GET['edit'];
+    $editGallery = getGallery($editGalleryId);
+    if (!$editGallery) {
+        $createError = 'Gallery not found.';
+        $editGalleryId = null;
+        $editGallery = null;
     }
 }
 
@@ -288,7 +336,42 @@ $galleries = getGalleries();
             </div>
         <?php endif; ?>
 
+        <!-- Edit Gallery Section (shown when editing) -->
+        <?php if ($editGallery): ?>
+        <div class="admin-section" style="background: #fff3cd; border: 2px solid #ffc107;">
+            <h2>Edit Gallery Settings</h2>
+            <form method="POST">
+                <input type="hidden" name="action" value="edit">
+                <input type="hidden" name="gallery_id" value="<?php echo htmlspecialchars($editGallery['id']); ?>">
+                <div class="form-group">
+                    <label><strong>Username:</strong> <?php echo htmlspecialchars($editGallery['username']); ?> (cannot be changed)</label>
+                </div>
+                <div class="form-group">
+                    <label for="edit_name">Display Name *</label>
+                    <input type="text" id="edit_name" name="name" required 
+                           value="<?php echo htmlspecialchars($editGallery['name']); ?>">
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="edit_allow_uploads" name="allow_uploads" value="1" 
+                               <?php echo (isset($editGallery['allow_uploads']) ? (bool)$editGallery['allow_uploads'] : true) ? 'checked' : ''; ?>
+                               style="width: auto; cursor: pointer;">
+                        <span>Allow image uploads in this gallery</span>
+                    </label>
+                    <p style="margin-top: 5px; color: #666; font-size: 13px;">
+                        Uncheck this to make this a view-only gallery (users can view but not upload images)
+                    </p>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn-primary">Save Changes</button>
+                    <a href="admin.php" class="btn-secondary" style="display: inline-block; padding: 10px 20px; text-decoration: none; border-radius: 4px; background: #6c757d; color: white;">Cancel</a>
+                </div>
+            </form>
+        </div>
+        <?php endif; ?>
+
         <!-- Create Gallery Section -->
+        <?php if (!$editGallery): ?>
         <div class="admin-section">
             <h2>Create New Gallery</h2>
             <form method="POST">
@@ -308,9 +391,19 @@ $galleries = getGalleries();
                     <input type="text" id="name" name="name" 
                            placeholder="Leave empty to use username">
                 </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="allow_uploads" name="allow_uploads" value="1" checked style="width: auto; cursor: pointer;">
+                        <span>Allow image uploads in this gallery</span>
+                    </label>
+                    <p style="margin-top: 5px; color: #666; font-size: 13px;">
+                        Uncheck this to create a view-only gallery (users can view but not upload images)
+                    </p>
+                </div>
                 <button type="submit" class="btn-primary">Create Gallery</button>
             </form>
         </div>
+        <?php endif; ?>
 
         <!-- Existing Galleries Section -->
         <div class="admin-section">
@@ -326,8 +419,28 @@ $galleries = getGalleries();
                                 <p><strong>Username:</strong> <?php echo htmlspecialchars($gallery['username']); ?></p>
                                 <p><strong>Gallery ID:</strong> <?php echo htmlspecialchars($gallery['id']); ?></p>
                                 <p><strong>Created:</strong> <?php echo date('Y-m-d H:i:s', $gallery['created']); ?></p>
+                                <p><strong>Uploads:</strong> 
+                                    <?php 
+                                    $allowUploads = isset($gallery['allow_uploads']) ? (bool)$gallery['allow_uploads'] : true;
+                                    if ($allowUploads): 
+                                    ?>
+                                        <span style="color: #28a745;">✓ Enabled</span>
+                                    <?php else: ?>
+                                        <span style="color: #dc3545;">✗ Disabled (View Only)</span>
+                                    <?php endif; ?>
+                                </p>
                             </div>
                             <div class="gallery-actions">
+                                <a href="index.php?admin_view=<?php echo urlencode($gallery['id']); ?>" 
+                                   class="btn-view-gallery" 
+                                   style="background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-right: 10px;">
+                                    View Gallery
+                                </a>
+                                <a href="admin.php?edit=<?php echo urlencode($gallery['id']); ?>" 
+                                   class="btn-edit-gallery" 
+                                   style="background: #007bff; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-right: 10px;">
+                                    Edit Settings
+                                </a>
                                 <button type="button" class="btn-upload-gallery" 
                                         onclick="openUploadModal('<?php echo htmlspecialchars($gallery['id']); ?>', '<?php echo htmlspecialchars($gallery['name']); ?>')">
                                     Upload Images

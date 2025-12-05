@@ -76,9 +76,10 @@ function saveGalleries($galleries) {
  * @param string $username Username for the gallery
  * @param string $password Password for the gallery
  * @param string $name Optional display name
+ * @param bool $allowUploads Whether to allow image uploads (default: true)
  * @return array|false Gallery object on success, false on failure
  */
-function createGallery($username, $password, $name = null) {
+function createGallery($username, $password, $name = null, $allowUploads = true) {
     // Validate username
     if (empty($username) || !preg_match('/^[a-zA-Z0-9_-]+$/', $username)) {
         return false;
@@ -100,7 +101,8 @@ function createGallery($username, $password, $name = null) {
         'password' => password_hash($password, PASSWORD_DEFAULT),
         'name' => $name ? $name : $username,
         'created' => time(),
-        'upload_dir' => 'uploads/' . $galleryId . '/'
+        'upload_dir' => 'uploads/' . $galleryId . '/',
+        'allow_uploads' => (bool)$allowUploads
     ];
     
     // Get existing galleries (fresh read)
@@ -237,6 +239,34 @@ function updateGalleryPassword($galleryId, $newPassword) {
     foreach ($galleries as &$gallery) {
         if ($gallery['id'] === $galleryId) {
             $gallery['password'] = password_hash($newPassword, PASSWORD_DEFAULT);
+            return saveGalleries($galleries);
+        }
+    }
+    
+    return false;
+}
+
+/**
+ * Update gallery settings
+ * @param string $galleryId Gallery ID
+ * @param array $settings Array of settings to update (name, allow_uploads)
+ * @return bool Success status
+ */
+function updateGallerySettings($galleryId, $settings) {
+    $galleries = getGalleries();
+    
+    foreach ($galleries as &$gallery) {
+        if ($gallery['id'] === $galleryId) {
+            // Update name if provided
+            if (isset($settings['name'])) {
+                $gallery['name'] = trim($settings['name']);
+            }
+            
+            // Update allow_uploads if provided
+            if (isset($settings['allow_uploads'])) {
+                $gallery['allow_uploads'] = (bool)$settings['allow_uploads'];
+            }
+            
             return saveGalleries($galleries);
         }
     }

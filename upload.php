@@ -30,6 +30,16 @@ if (!$gallery) {
     exit;
 }
 
+// Check if uploads are allowed for this gallery
+$allowUploads = isset($gallery['allow_uploads']) ? (bool)$gallery['allow_uploads'] : true;
+if (!$allowUploads) {
+    ob_clean();
+    header('Content-Type: application/json');
+    http_response_code(403);
+    echo json_encode(['success' => false, 'error' => 'Uploads are disabled for this gallery']);
+    exit;
+}
+
 // Set upload directory for this gallery
 $galleryUploadDir = __DIR__ . '/' . $gallery['upload_dir'];
 if (!file_exists($galleryUploadDir)) {

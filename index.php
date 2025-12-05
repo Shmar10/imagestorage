@@ -6,20 +6,57 @@
 require_once 'config.php';
 require_once 'galleries.php';
 
-// Check gallery authentication
-session_name(GALLERY_SESSION_NAME);
-session_start();
-
-// If not authenticated, redirect to user login
-if (!isset($_SESSION['gallery_authenticated']) || $_SESSION['gallery_authenticated'] !== true) {
-    header('Location: user_login.php');
-    exit;
+// Check if this is an admin view request
+$isAdminView = false;
+if (isset($_GET['admin_view']) && !empty($_GET['admin_view'])) {
+    // Check admin authentication first
+    session_name(ADMIN_SESSION_NAME);
+    session_start();
+    
+    if (isset($_SESSION['admin_authenticated']) && $_SESSION['admin_authenticated'] === true) {
+        $galleryId = $_GET['admin_view'];
+        $gallery = getGallery($galleryId);
+        
+        if ($gallery) {
+            // Close admin session and start gallery session
+            session_write_close();
+            session_name(GALLERY_SESSION_NAME);
+            session_start();
+            
+            // Set gallery session for admin view
+            $_SESSION['gallery_id'] = $gallery['id'];
+            $_SESSION['gallery_username'] = $gallery['username'];
+            $_SESSION['gallery_name'] = $gallery['name'];
+            $_SESSION['gallery_authenticated'] = true;
+            $_SESSION['admin_view'] = true; // Flag to show back button
+            $isAdminView = true;
+        } else {
+            // Gallery not found, redirect back to admin
+            header('Location: admin.php?error=gallery_not_found');
+            exit;
+        }
+    } else {
+        // Not authenticated as admin, redirect to admin login
+        header('Location: admin.php');
+        exit;
+    }
+} else {
+    // Normal gallery authentication
+    session_name(GALLERY_SESSION_NAME);
+    session_start();
+    
+    // If not authenticated, redirect to user login
+    if (!isset($_SESSION['gallery_authenticated']) || $_SESSION['gallery_authenticated'] !== true) {
+        header('Location: user_login.php');
+        exit;
+    }
+    
+    // Get gallery information
+    $galleryId = $_SESSION['gallery_id'];
+    $gallery = getGallery($galleryId);
 }
 
-// Get gallery information
-$galleryId = $_SESSION['gallery_id'];
 $galleryName = $_SESSION['gallery_name'] ?? 'My Gallery';
-$gallery = getGallery($galleryId);
 
 // If gallery not found, clear session and redirect
 if (!$gallery) {
@@ -102,10 +139,20 @@ if (file_exists($rejectsDir)) {
     <div class="container">
         <header>
             <h1><?php echo htmlspecialchars($galleryName); ?></h1>
-            <a href="logout.php" class="logout-btn">Logout</a>
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <?php if (isset($_SESSION['admin_view']) && $_SESSION['admin_view'] === true): ?>
+                    <a href="admin.php" class="logout-btn" style="background: #6c757d;">Back to Admin Panel</a>
+                <?php endif; ?>
+                <a href="logout.php" class="logout-btn">Logout</a>
+            </div>
         </header>
 
-        <!-- Upload Section -->
+        <!-- Upload Section (only shown if uploads are allowed) -->
+        <?php 
+        // Check if uploads are allowed (default to true for backward compatibility)
+        $allowUploads = isset($gallery['allow_uploads']) ? (bool)$gallery['allow_uploads'] : true;
+        if ($allowUploads): 
+        ?>
         <section class="upload-section">
             <h2>Upload Images</h2>
             <div class="upload-area" id="uploadArea">
@@ -128,6 +175,7 @@ if (file_exists($rejectsDir)) {
             </div>
             <div id="uploadResults"></div>
         </section>
+        <?php endif; ?>
 
         <!-- Gallery Section -->
         <section class="gallery-section">
