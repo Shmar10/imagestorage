@@ -36,6 +36,13 @@ if (!$gallery) {
     die('Gallery not found');
 }
 
+// Check if downloads are allowed (default to true for backward compatibility)
+$allowDownloads = isset($gallery['allow_downloads']) ? (bool)$gallery['allow_downloads'] : true;
+if (!$allowDownloads) {
+    http_response_code(403);
+    die('Downloads are disabled for this gallery');
+}
+
 $galleryUploadDir = __DIR__ . '/' . $gallery['upload_dir'];
 
 // Handle files in rejects subdirectory

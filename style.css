@@ -399,6 +399,42 @@ header h1 {
     opacity: 0.6;
 }
 
+.btn-delete-admin {
+    background: var(--error-color);
+    color: white;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.2s;
+}
+
+.btn-delete-admin:hover {
+    background: #c82333;
+}
+
+.btn-delete-batch {
+    background: var(--error-color);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+.btn-delete-batch:hover:not(:disabled) {
+    background: #c82333;
+}
+
+.btn-delete-batch:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
 .btn-reject {
     background: #ff9800;
     color: white;

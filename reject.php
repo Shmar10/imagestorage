@@ -36,25 +36,44 @@ if (!isset($_POST['file']) || empty($_POST['file'])) {
 $galleryUploadDir = __DIR__ . '/' . $gallery['upload_dir'];
 $rejectsDir = $galleryUploadDir . 'rejects/';
 $fileName = basename($_POST['file']);
-$filePath = $galleryUploadDir . $fileName;
 
-// Security: Ensure file is within gallery upload directory
-$realPath = realpath($filePath);
-$realUploadDir = realpath($galleryUploadDir);
-
-if (!$realPath || !$realUploadDir) {
-    echo json_encode(['success' => false, 'error' => 'Invalid path']);
+// Sanitize filename to prevent directory traversal
+$fileName = basename($fileName);
+if (empty($fileName) || $fileName === '.' || $fileName === '..') {
+    echo json_encode(['success' => false, 'error' => 'Invalid filename']);
     exit;
 }
 
-if (strpos($realPath, $realUploadDir) !== 0) {
-    echo json_encode(['success' => false, 'error' => 'Access denied']);
+$filePath = $galleryUploadDir . $fileName;
+
+// Ensure upload directory exists
+if (!file_exists($galleryUploadDir) || !is_dir($galleryUploadDir)) {
+    echo json_encode(['success' => false, 'error' => 'Gallery upload directory not found']);
     exit;
 }
 
 // Check if file exists
 if (!file_exists($filePath) || !is_file($filePath)) {
     echo json_encode(['success' => false, 'error' => 'File not found']);
+    exit;
+}
+
+// Security: Ensure file is within gallery upload directory using realpath
+$realPath = realpath($filePath);
+$realUploadDir = realpath($galleryUploadDir);
+
+if (!$realPath) {
+    echo json_encode(['success' => false, 'error' => 'Invalid file path']);
+    exit;
+}
+
+if (!$realUploadDir) {
+    echo json_encode(['success' => false, 'error' => 'Invalid upload directory']);
+    exit;
+}
+
+if (strpos($realPath, $realUploadDir) !== 0) {
+    echo json_encode(['success' => false, 'error' => 'Access denied']);
     exit;
 }
 

@@ -72,6 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $password = $_POST['password'] ?? '';
     $name = trim($_POST['name'] ?? '');
     $allowUploads = isset($_POST['allow_uploads']) && $_POST['allow_uploads'] === '1';
+    $allowDownloads = isset($_POST['allow_downloads']) && $_POST['allow_downloads'] === '1';
     
     if (empty($username) || empty($password)) {
         $createError = 'Username and password are required';
@@ -85,7 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             if ($existing !== null) {
                 $createError = 'Username "' . htmlspecialchars($username) . '" is already in use.';
             } else {
-                $result = createGallery($username, $password, $name, $allowUploads);
+                $result = createGallery($username, $password, $name, $allowUploads, $allowDownloads);
                 if ($result) {
                     $createSuccess = 'Gallery created successfully!';
                 } else {
@@ -115,12 +116,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $galleryId = $_POST['gallery_id'] ?? '';
     $name = trim($_POST['name'] ?? '');
     $allowUploads = isset($_POST['allow_uploads']) && $_POST['allow_uploads'] === '1';
+    $allowDownloads = isset($_POST['allow_downloads']) && $_POST['allow_downloads'] === '1';
     
     if (!empty($galleryId)) {
         if (!empty($name)) {
             $settings = [
                 'name' => $name,
-                'allow_uploads' => $allowUploads
+                'allow_uploads' => $allowUploads,
+                'allow_downloads' => $allowDownloads
             ];
             if (updateGallerySettings($galleryId, $settings)) {
                 // Redirect to main page with success message
@@ -362,6 +365,17 @@ $galleries = getGalleries();
                         Uncheck this to make this a view-only gallery (users can view but not upload images)
                     </p>
                 </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="edit_allow_downloads" name="allow_downloads" value="1" 
+                               <?php echo (isset($editGallery['allow_downloads']) ? (bool)$editGallery['allow_downloads'] : true) ? 'checked' : ''; ?>
+                               style="width: auto; cursor: pointer;">
+                        <span>Allow image downloads in this gallery</span>
+                    </label>
+                    <p style="margin-top: 5px; color: #666; font-size: 13px;">
+                        Uncheck this to disable download functionality (users can view but not download images)
+                    </p>
+                </div>
                 <div style="display: flex; gap: 10px;">
                     <button type="submit" class="btn-primary">Save Changes</button>
                     <a href="admin.php" class="btn-secondary" style="display: inline-block; padding: 10px 20px; text-decoration: none; border-radius: 4px; background: #6c757d; color: white;">Cancel</a>
@@ -400,6 +414,15 @@ $galleries = getGalleries();
                         Uncheck this to create a view-only gallery (users can view but not upload images)
                     </p>
                 </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="allow_downloads" name="allow_downloads" value="1" checked style="width: auto; cursor: pointer;">
+                        <span>Allow image downloads in this gallery</span>
+                    </label>
+                    <p style="margin-top: 5px; color: #666; font-size: 13px;">
+                        Uncheck this to disable download functionality (users can view but not download images)
+                    </p>
+                </div>
                 <button type="submit" class="btn-primary">Create Gallery</button>
             </form>
         </div>
@@ -427,6 +450,16 @@ $galleries = getGalleries();
                                         <span style="color: #28a745;">✓ Enabled</span>
                                     <?php else: ?>
                                         <span style="color: #dc3545;">✗ Disabled (View Only)</span>
+                                    <?php endif; ?>
+                                </p>
+                                <p><strong>Downloads:</strong> 
+                                    <?php 
+                                    $allowDownloads = isset($gallery['allow_downloads']) ? (bool)$gallery['allow_downloads'] : true;
+                                    if ($allowDownloads): 
+                                    ?>
+                                        <span style="color: #28a745;">✓ Enabled</span>
+                                    <?php else: ?>
+                                        <span style="color: #dc3545;">✗ Disabled</span>
                                     <?php endif; ?>
                                 </p>
                             </div>

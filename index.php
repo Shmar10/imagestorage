@@ -71,6 +71,9 @@ if (!file_exists($galleryUploadDir)) {
     mkdir($galleryUploadDir, 0755, true);
 }
 
+// Check if downloads are allowed (default to true for backward compatibility)
+$allowDownloads = isset($gallery['allow_downloads']) ? (bool)$gallery['allow_downloads'] : true;
+
 // Get list of uploaded images for this gallery (excluding rejects)
 $images = [];
 $rejectedImages = [];
@@ -197,12 +200,19 @@ if (file_exists($rejectsDir)) {
                 <div class="gallery-controls">
                     <button id="selectAllBtn" class="btn-secondary">Select All</button>
                     <button id="deselectAllBtn" class="btn-secondary" style="display: none;">Deselect All</button>
+                    <?php if ($allowDownloads): ?>
                     <button id="downloadSelectedBtn" class="btn-primary" style="display: none;">
                         Download Selected (<span class="selected-count">0</span> files)
                     </button>
+                    <?php endif; ?>
                     <button id="rejectSelectedBtn" class="btn-reject-batch" disabled>
                         Reject Selected (<span class="selected-count">0</span>)
                     </button>
+                    <?php if (isset($_SESSION['admin_view']) && $_SESSION['admin_view'] === true): ?>
+                    <button id="deleteSelectedBtn" class="btn-delete-batch" disabled style="background: #dc3545; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer;">
+                        Delete Selected (<span class="selected-count">0</span>)
+                    </button>
+                    <?php endif; ?>
                 </div>
             </div>
             <div class="gallery" id="gallery">
@@ -240,12 +250,20 @@ if (file_exists($rejectsDir)) {
                                     <span><?php echo date('Y-m-d H:i', $image['modified']); ?></span>
                                 </div>
                                 <div class="gallery-item-actions">
+                                    <?php if ($allowDownloads): ?>
                                     <button class="btn-download download-single" 
-                                            data-file="<?php echo htmlspecialchars($image['name']); ?>"
+                                            data-file="<?php echo htmlspecialchars($image['name']); ?>" 
                                             data-url="<?php echo htmlspecialchars($image['url']); ?>">Download</button>
+                                    <?php endif; ?>
                                     <button class="btn-reject" 
-                                            data-file="<?php echo htmlspecialchars($image['name']); ?>"
+                                            data-file="<?php echo htmlspecialchars($image['name']); ?>" 
                                             title="Reject image">Reject</button>
+                                    <?php if (isset($_SESSION['admin_view']) && $_SESSION['admin_view'] === true): ?>
+                                    <button class="btn-delete-admin" 
+                                            data-file="<?php echo htmlspecialchars($image['name']); ?>" 
+                                            data-gallery-id="<?php echo htmlspecialchars($galleryId); ?>"
+                                            title="Delete image (Admin only)">Delete</button>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
@@ -291,8 +309,14 @@ if (file_exists($rejectsDir)) {
                             </div>
                             <div class="gallery-item-actions">
                                 <button class="btn-restore" 
-                                        data-file="<?php echo htmlspecialchars($image['name']); ?>"
+                                        data-file="<?php echo htmlspecialchars($image['name']); ?>" 
                                         title="Restore to Gallery">Restore to Gallery</button>
+                                <?php if (isset($_SESSION['admin_view']) && $_SESSION['admin_view'] === true): ?>
+                                <button class="btn-delete-admin" 
+                                        data-file="rejects/<?php echo htmlspecialchars($image['name']); ?>" 
+                                        data-gallery-id="<?php echo htmlspecialchars($galleryId); ?>"
+                                        title="Delete image (Admin only)">Delete</button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>

@@ -77,9 +77,10 @@ function saveGalleries($galleries) {
  * @param string $password Password for the gallery
  * @param string $name Optional display name
  * @param bool $allowUploads Whether to allow image uploads (default: true)
+ * @param bool $allowDownloads Whether to allow image downloads (default: true)
  * @return array|false Gallery object on success, false on failure
  */
-function createGallery($username, $password, $name = null, $allowUploads = true) {
+function createGallery($username, $password, $name = null, $allowUploads = true, $allowDownloads = true) {
     // Validate username
     if (empty($username) || !preg_match('/^[a-zA-Z0-9_-]+$/', $username)) {
         return false;
@@ -102,7 +103,8 @@ function createGallery($username, $password, $name = null, $allowUploads = true)
         'name' => $name ? $name : $username,
         'created' => time(),
         'upload_dir' => 'uploads/' . $galleryId . '/',
-        'allow_uploads' => (bool)$allowUploads
+        'allow_uploads' => (bool)$allowUploads,
+        'allow_downloads' => (bool)$allowDownloads
     ];
     
     // Get existing galleries (fresh read)
@@ -249,7 +251,7 @@ function updateGalleryPassword($galleryId, $newPassword) {
 /**
  * Update gallery settings
  * @param string $galleryId Gallery ID
- * @param array $settings Array of settings to update (name, allow_uploads)
+ * @param array $settings Array of settings to update (name, allow_uploads, allow_downloads)
  * @return bool Success status
  */
 function updateGallerySettings($galleryId, $settings) {
@@ -265,6 +267,11 @@ function updateGallerySettings($galleryId, $settings) {
             // Update allow_uploads if provided
             if (isset($settings['allow_uploads'])) {
                 $gallery['allow_uploads'] = (bool)$settings['allow_uploads'];
+            }
+            
+            // Update allow_downloads if provided
+            if (isset($settings['allow_downloads'])) {
+                $gallery['allow_downloads'] = (bool)$settings['allow_downloads'];
             }
             
             return saveGalleries($galleries);

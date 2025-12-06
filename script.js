@@ -14,6 +14,7 @@
     const deselectAllBtn = document.getElementById('deselectAllBtn');
     const downloadSelectedBtn = document.getElementById('downloadSelectedBtn');
     const rejectSelectedBtn = document.getElementById('rejectSelectedBtn');
+    const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
 
     // Upload functionality (only if upload section exists)
     if (uploadArea && fileInput) {
@@ -130,18 +131,66 @@
 
     // Show success message
     function showSuccess(message) {
+        let container = uploadResults;
+        
+        // If uploadResults doesn't exist, create a temporary message container
+        if (!container) {
+            container = document.getElementById('messageContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'messageContainer';
+                container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 10000; max-width: 400px;';
+                document.body.appendChild(container);
+            }
+        }
+        
         const div = document.createElement('div');
         div.className = 'upload-success';
         div.textContent = message;
-        uploadResults.appendChild(div);
+        div.style.cssText = 'padding: 10px 15px; margin-bottom: 10px; background-color: #4caf50; color: white; border-radius: 4px;';
+        container.appendChild(div);
+        
+        // Auto-remove after 3 seconds if it's a temporary container
+        if (!uploadResults) {
+            setTimeout(() => {
+                div.remove();
+                if (container.id === 'messageContainer' && container.children.length === 0) {
+                    container.remove();
+                }
+            }, 3000);
+        }
     }
 
     // Show error message
     function showError(message) {
+        let container = uploadResults;
+        
+        // If uploadResults doesn't exist, create a temporary message container
+        if (!container) {
+            container = document.getElementById('messageContainer');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'messageContainer';
+                container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 10000; max-width: 400px;';
+                document.body.appendChild(container);
+            }
+        }
+        
         const div = document.createElement('div');
         div.className = 'upload-error';
         div.textContent = message;
-        uploadResults.appendChild(div);
+        div.style.cssText = 'padding: 10px 15px; margin-bottom: 10px; background-color: #f44336; color: white; border-radius: 4px;';
+        container.appendChild(div);
+        
+        // Auto-remove after 5 seconds if it's a temporary container
+        if (!uploadResults) {
+            setTimeout(() => {
+                div.remove();
+                if (container.id === 'messageContainer' && container.children.length === 0) {
+                    container.remove();
+                }
+            }, 5000);
+        }
     }
 
     // Show multiple errors
@@ -168,19 +217,31 @@
         });
         
         if (count > 0) {
-            downloadSelectedBtn.style.display = 'inline-block';
-            downloadSelectedBtn.disabled = false;
+            if (downloadSelectedBtn) {
+                downloadSelectedBtn.style.display = 'inline-block';
+                downloadSelectedBtn.disabled = false;
+            }
             if (rejectSelectedBtn) {
                 rejectSelectedBtn.style.display = 'inline-block';
                 rejectSelectedBtn.disabled = false;
             }
+            if (deleteSelectedBtn) {
+                deleteSelectedBtn.style.display = 'inline-block';
+                deleteSelectedBtn.disabled = false;
+            }
             deselectAllBtn.style.display = 'inline-block';
             selectAllBtn.style.display = 'none';
         } else {
-            downloadSelectedBtn.style.display = 'none';
+            if (downloadSelectedBtn) {
+                downloadSelectedBtn.style.display = 'none';
+            }
             if (rejectSelectedBtn) {
                 rejectSelectedBtn.style.display = 'inline-block';
                 rejectSelectedBtn.disabled = true;
+            }
+            if (deleteSelectedBtn) {
+                deleteSelectedBtn.style.display = 'inline-block';
+                deleteSelectedBtn.disabled = true;
             }
             deselectAllBtn.style.display = 'none';
             selectAllBtn.style.display = 'inline-block';
@@ -214,7 +275,8 @@
     });
 
     // Download selected button - downloads files individually using blob URLs
-    downloadSelectedBtn.addEventListener('click', async () => {
+    if (downloadSelectedBtn) {
+        downloadSelectedBtn.addEventListener('click', async () => {
         const checked = document.querySelectorAll('.image-checkbox:checked');
         if (checked.length === 0) return;
 
@@ -265,7 +327,8 @@
                 setTimeout(() => document.body.removeChild(link), 100);
             }
         }
-    });
+        });
+    }
 
     // Reject selected button
     if (rejectSelectedBtn) {
@@ -338,6 +401,144 @@
             }
         }
     });
+
+    // Delete selected button (admin only)
+    if (deleteSelectedBtn) {
+        deleteSelectedBtn.addEventListener('click', () => {
+            const checked = document.querySelectorAll('.image-checkbox:checked');
+            if (checked.length === 0) return;
+
+            const files = Array.from(checked).map(cb => cb.value);
+
+            // Get gallery ID from any delete button on the page (all images are from same gallery)
+            const firstDeleteBtn = document.querySelector('.btn-delete-admin');
+            const galleryId = firstDeleteBtn ? firstDeleteBtn.getAttribute('data-gallery-id') : null;
+            
+            if (!galleryId) {
+                showError('Unable to determine gallery ID');
+                return;
+            }
+
+            if (confirm(`Are you sure you want to permanently delete ${files.length} image(s)? This action cannot be undone.`)) {
+                deleteFilesAdmin(files, galleryId);
+            }
+        });
+    }
+
+    // Individual admin delete button handlers
+    document.addEventListener('click', (e) => {
+        if (e.target.classList.contains('btn-delete-admin')) {
+            const fileName = e.target.getAttribute('data-file');
+            const galleryId = e.target.getAttribute('data-gallery-id');
+            
+            if (!fileName || !galleryId) {
+                showError('Missing file or gallery information');
+                return;
+            }
+
+            if (confirm(`Are you sure you want to permanently delete "${fileName}"? This action cannot be undone.`)) {
+                deleteFilesAdmin([fileName], galleryId);
+            }
+        }
+    });
+
+    // Delete files function (admin only)
+    function deleteFilesAdmin(files, galleryId) {
+        // Show loading state
+        files.forEach(fileName => {
+            const item = document.querySelector(`.gallery-item[data-file="${escapeSelector(fileName)}"]`);
+            if (!item) {
+                // Try rejected items
+                const rejectedItem = document.querySelector(`.rejected-item[data-file="${escapeSelector(fileName.replace('rejects/', ''))}"]`);
+                if (rejectedItem) {
+                    rejectedItem.style.opacity = '0.5';
+                    rejectedItem.style.pointerEvents = 'none';
+                }
+            } else {
+                item.style.opacity = '0.5';
+                item.style.pointerEvents = 'none';
+            }
+        });
+
+        // Delete files one by one
+        let completed = 0;
+        let failed = 0;
+
+        files.forEach(fileName => {
+            const formData = new FormData();
+            formData.append('file', fileName);
+            formData.append('gallery_id', galleryId);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', 'admin_delete.php');
+            
+            xhr.addEventListener('load', () => {
+                completed++;
+                if (xhr.status === 200) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.success) {
+                            // Remove the item from DOM
+                            const cleanFileName = fileName.replace('rejects/', '');
+                            const item = document.querySelector(`.gallery-item[data-file="${escapeSelector(cleanFileName)}"]`);
+                            const rejectedItem = document.querySelector(`.rejected-item[data-file="${escapeSelector(cleanFileName)}"]`);
+                            
+                            if (item) {
+                                item.remove();
+                            } else if (rejectedItem) {
+                                rejectedItem.remove();
+                                // If no more rejected items, hide the rejected section
+                                const rejectedGallery = document.getElementById('rejectedGallery');
+                                if (rejectedGallery && rejectedGallery.querySelectorAll('.rejected-item').length === 0) {
+                                    const rejectedSection = rejectedGallery.closest('.rejects-section');
+                                    if (rejectedSection) {
+                                        rejectedSection.remove();
+                                    }
+                                }
+                            }
+                        } else {
+                            failed++;
+                            console.error('Delete failed:', response.error);
+                        }
+                    } catch (e) {
+                        failed++;
+                        console.error('Failed to parse response');
+                    }
+                } else {
+                    failed++;
+                }
+
+                // If all requests completed, show result and reload if needed
+                if (completed === files.length) {
+                    if (failed === 0) {
+                        showSuccess(`Successfully deleted ${files.length} file(s)`);
+                        // Reload after a short delay to refresh the page
+                        setTimeout(() => {
+                            window.location.reload(true);
+                        }, 1000);
+                    } else {
+                        showError(`Deleted ${files.length - failed} file(s), ${failed} failed`);
+                        setTimeout(() => {
+                            window.location.reload(true);
+                        }, 2000);
+                    }
+                }
+            });
+
+            xhr.addEventListener('error', () => {
+                completed++;
+                failed++;
+                if (completed === files.length) {
+                    showError(`Error deleting files. ${failed} failed.`);
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                }
+            });
+
+            xhr.send(formData);
+        });
+    }
 
     // Reject files function
     function rejectFiles(files) {
